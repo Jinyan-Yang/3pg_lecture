@@ -1,0 +1,219 @@
+---
+title: "例一： 气候、环境对模型的的影响"
+author: "主讲人：杨金炎"
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: true
+    toc_float: true
+    code_folding: true
+---
+```{r message=F, include=FALSE}
+# 调用
+library('r3PG')
+```
+
+定义一个画图函数方便以后使用。
+
+```{r}
+plot.func <- function(out.1,out.2,
+                      target.var = 'gpp',
+                      y.name = 'GPP'){
+  
+  # 1
+  plot(value~date,data = out.1[out.1$species == 'Fagus sylvatica' &
+                                 out.1$variable == target.var,],
+       type='l',xlab='',ylab=y.name,col='grey')
+  
+  points(value~date,data = out.1[out.1$species == 'Pinus sylvestris' &
+                                   out.1$variable == target.var,],
+         type='l',xlab='',col='red')
+  
+  legend('topleft',legend = unique(out.1$species),
+         lty='solid',col=c('grey','red'),bty='n')
+  # 2
+  points(value~date,data = out.2[out.2$species == 
+                                   'Fagus sylvatica' &
+                                   out.2$variable == target.var,],
+         type='l',xlab='',col='grey',lty='dashed')
+  
+  points(value~date,data = out.2[out.2$species == 
+                                   'Pinus sylvestris' &
+                                   out.2$variable == target.var,],
+         type='l',xlab='',col='red',lty='dashed')
+}
+```
+### 1. 如何改变初始参数
+#### 1.1 初始土壤水分
+
+首先，用原始数据运行模型。
+
+```{r}
+# 运行模型
+output <- run_3PG(site = d_site,#站点相关信息，初始土壤水
+                  species = d_species,#树种相关信息，初始生物量
+                  climate = d_climate,#气象因子
+                  thinning = d_thinning,#间苗
+                  parameters = d_parameters,#按树种的生理参数
+                  size_dist = d_sizeDist,#修正大小分布
+                  settings = list(light_model = 1, 
+                                  transp_model = 2, phys_model = 2,
+                                  correct_bias = 0, calculate_d13c = 0),
+                  check_input = TRUE, 
+                  df_out = TRUE)
+
+```
+
+第二，我们改变初始土壤水含量。
+
+```{r}
+# 运行模型
+site.new <- d_site
+site.new$asw_i <- 1
+
+output.sw <- run_3PG(site = site.new,#站点相关信息，初始土壤水
+                  species = d_species,#树种相关信息，初始生物量
+                  climate = d_climate,#气象因子
+                  thinning = d_thinning,#间苗
+                  parameters = d_parameters,#按树种的生理参数
+                  size_dist = d_sizeDist,#修正大小分布
+                  settings = list(light_model = 1, 
+                                  transp_model = 2, phys_model = 2,
+                                  correct_bias = 0, calculate_d13c = 0),
+                  check_input = TRUE, 
+                  df_out = TRUE)
+
+```
+```{r}
+# 作图
+plot.func(out.1 = output,out.2 = output.sw)
+```
+
+初始土壤水改变巨大，但是模型的结果恢复很快。原因在于一月份降水很多蒸散失又少。水分不是胁迫因素。
+
+```{r}
+head(d_climate)
+```
+
+#### 1.2 初始生物量
+
+我们假设Pinus sylvestris的叶生物量从3将为0.3。
+
+```{r}
+# 运行模型
+spc.new <- d_species
+spc.new$biom_foliage[spc.new$species ==  'Pinus sylvestris'] <- 0.3
+
+output.spc <- run_3PG(site = d_site,#站点相关信息，初始土壤水
+                  species = spc.new,#树种相关信息，初始生物量
+                  climate = d_climate,#气象因子
+                  thinning = d_thinning,#间苗
+                  parameters = d_parameters,#按树种的生理参数
+                  size_dist = d_sizeDist,#修正大小分布
+                  settings = list(light_model = 1, 
+                                  transp_model = 2, phys_model = 2,
+                                  correct_bias = 0, calculate_d13c = 0),
+                  check_input = TRUE, 
+                  df_out = TRUE)
+
+```
+
+```{r}
+# 作图
+par(mar=c(5,5,1,1))
+plot.func(out.1 = output,out.2 = output.spc)
+```
+
+可见初始叶生物量的影响是长期的。且一种植物的变化会影响其他植物。
+
+### 2. 气候变化
+
+基于上面类似的方法，我们可以预测气候变化对不同植物的影响。
+例如，我们可以假设降水变为原先的一半。
+
+```{r}
+# 运行模型
+met.new <- d_climate
+met.new$prcp <- d_climate$prcp * 0.5
+
+output.rain <- run_3PG(site = d_site,#站点相关信息，初始土壤水
+                  species = d_species,#树种相关信息，初始生物量
+                  climate = met.new,#气象因子
+                  thinning = d_thinning,#间苗
+                  parameters = d_parameters,#按树种的生理参数
+                  size_dist = d_sizeDist,#修正大小分布
+                  settings = list(light_model = 1, 
+                                  transp_model = 2, phys_model = 2,
+                                  correct_bias = 0, calculate_d13c = 0),
+                  check_input = TRUE, 
+                  df_out = TRUE)
+
+```
+
+```{r}
+# 作图
+par(mar=c(5,5,1,1))
+plot.func(out.1 = output,out.2 = output.rain)
+```
+
+可见降水对生产力影响巨大且不同植物的响应不同。
+
+同样的我们也可以同时改变多种因素。这里我们模拟一种降水下降10%，温度上升4摄氏度，二氧化碳浓度上升60 p.p.m.的情况。
+
+```{r}
+# 运行模型
+met.new <- d_climate
+met.new$prcp <- d_climate$prcp * 0.9
+met.new$tmp_min <- d_climate$tmp_min + 4
+met.new$tmp_max <- d_climate$tmp_max + 4
+met.new$tmp_ave <- d_climate$tmp_ave + 4
+met.new$co2 <- d_climate$co2 + 60
+
+output.met <- run_3PG(site = d_site,#站点相关信息，初始土壤水
+                  species = d_species,#树种相关信息，初始生物量
+                  climate = met.new,#气象因子
+                  thinning = d_thinning,#间苗
+                  parameters = d_parameters,#按树种的生理参数
+                  size_dist = d_sizeDist,#修正大小分布
+                  settings = list(light_model = 1, 
+                                  transp_model = 2, phys_model = 2,
+                                  correct_bias = 0, calculate_d13c = 0),
+                  check_input = TRUE, 
+                  df_out = TRUE)
+
+```
+
+```{r}
+# 作图
+par(mar=c(5,5,1,1))
+plot.func(out.1 = output,out.2 = output.met)
+```
+
+气候变化影响的不只有生产力，还有蒸腾作用。
+
+```{r}
+# 作图
+par(mar=c(5,5,1,1))
+plot.func(out.1 = output,
+          out.2 = output.met,
+          target.var = 'transp_veg',
+          y.name = 'Transpiration')
+```
+
+### 3. 如何获取气象数据
+
+理想情况下，每一个站点都应该气象站记录的气象数据。但是，很多时候相应的数据不存在。那么，就需要查找缺失的数据或者找到其他气象数据来源。处理这两种问题的方法一致，都需要找到高质量的气候数据。
+
+根据研究区域的不同，气象数据的来源可以很多。一般以邻近的气象站数据为佳。当没有实地测量的时候，就需要使用格网数据。下面提供两个可以实现全球覆盖的免费数据来源。 
+
+##### WorldClim
+
+worldClim<https://www.worldclim.org/> 较为常用。它可以提供过去和未来的气象数据。 下载后的worldclim可以使用R中的raster功能包中的raster函数直接读取。worldclim提供的是日尺度的气象数据，在下载后，还需要求和或取均值。此数据也可用其他常用语言处理。
+
+##### Chelsa
+
+Chelsa<https://chelsa-climate.org/> 是另外一种常用的数据来源。同样可以提供过去和未来的气象数据。起具体的内容和使用方法与worldclim类似。Chelsa的重要特点有：提供的数据种类更多（饱和蒸气压亏缺，潜在蒸散失）；在特定区域精度更好（喜马拉雅）。它的具体情况可以参考：
+
+Karger, D.N., Wilson, A.M., Mahony, C., Zimmermann, N.E., Jetz, W. (2021): Global daily 1km land surface precipitation based on cloud cover-informed downscaling. Scientific Data. <https://doi.org/10.1038/s41597-021-01084-6>
+
+Karger, D.N., Schmatz, D., Detttling, D., Zimmermann, N.E. (2020): High resolution monthly precipitation and temperature timeseries for the period 2006-2100. Scientific Data. <https://doi.org/10.1038/s41597-020-00587-y>

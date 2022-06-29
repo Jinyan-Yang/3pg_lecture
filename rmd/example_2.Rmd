@@ -1,0 +1,241 @@
+---
+title: "例二： 植物生理参数对模型的的影响"
+author: "主讲人： 杨金炎"
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: true
+    toc_float: true
+    code_folding: true
+---
+```{r message=F, include=FALSE}
+# 调用
+library('r3PG')
+```
+
+##  增加新物种
+增加物种需要修改的输入有species、thinning、parameters以及size_dist。其中，尤其以parameters最为重要。下面我们依次介绍需要进行的修改。
+
+### 1 查看现有物种信息
+首先，可以查看现有的文献当中，覆盖哪些地区和物种。
+
+```{r}
+list.spc <- get_parameters(mode = "overview", sp_names = NULL)
+
+head(list.spc)
+```
+
+
+如果我们感兴趣的物种在以往的文献中出现，那么我们就可以直接用文献中的数据。在此，我们以Larix olgensis为例。
+
+```{r}
+lo.df <- get_parameters(mode = "full", sp_names = 'Larix olgensis')
+
+print(lo.df)
+```
+
+### 2 现有物种参数处理
+
+可以看出，同一种植物可以对应很多不同的参数数值。实操时应当考虑这些数据的实际来源和意义是否符合具体研究的内容。下面我仅选取第一篇文献中的参数。
+
+```{r}
+# 此处我们去掉关于数据来源的前几列
+lo.sub <- subset(lo.df[2,],select = -c(source_full,species,
+                                       link,notes,parset_id,     
+                                       source,source_comments,
+                                       country,age,type,year,region))
+# 修改数据结构
+lo.sub.long <- as.data.frame(t(lo.sub))
+names(lo.sub.long) <- 'Larix olgensis'
+lo.sub.long$parameter <- row.names(lo.sub.long)
+print(lo.sub.long)
+```
+
+现在我们可以把新物种加入到参数列表中。需要注意的是有很多参数该文献没有提供。处理这些缺失参数应当考虑缺失参数的重要性和是否有其他类似物种可以提供替代。在此例子中，我们简单选用Fagus sylvatica的参数替代缺失参数。
+
+```{r}
+par.new <- merge(d_parameters,lo.sub.long)
+
+na.index <- which(is.na(par.new$`Larix olgensis`))
+
+par.new[na.index,4] <- par.new[na.index,2]
+
+print(par.new)
+```
+
+### 3 修改相应其他输入数据
+
+我们还需要修改species数据。
+
+```{r}
+spc.new <- d_species
+
+spc.new[3,] <- list('Larix olgensis','1958-01',0.25,800,90,15.2,3)
+
+spc.new$fertility <- c(0.3,0.3,0.3)
+spc.new$stems_n <-  500
+spc.new$biom_stem <-  60
+spc.new$biom_root <-  8
+spc.new$biom_foliage <-  1.5
+print(spc.new)
+```
+
+最后，需要修改thinning数据。此处我们使用Fagus sylvatica的数据。
+
+```{r}
+thin.new <- d_thinning
+
+thin.new[3,] <- d_thinning[1,]
+
+thin.new$species[3] <- 'Larix olgensis'
+
+thin.new$age <- 200
+
+print(thin.new)
+```
+
+此处我们不需要修改sizeDist参数。具体原因如前所述-此处不需要修正异速生长关系。以下代码可以作为参考。
+
+```{r}
+size.new <- d_sizeDist
+
+size.new[,4] <- d_sizeDist[,2]
+
+names(size.new)[4] <- 'Larix olgensis'
+
+print(size.new)
+```
+
+### 4 运行新的模型
+
+修改全部输入数据后，就可以再次运行模型。
+
+```{r}
+out.1 <- run_3PG(site = d_site,#站点相关信息，初始土壤水
+                  species = spc.new,#树种相关信息，初始生物量
+                  climate = d_climate,#气象因子
+                  thinning = thin.new,#间苗
+                  parameters = par.new,#按树种的生理参数
+                  size_dist = size.new,#修正大小分布
+                  settings = list(light_model = 2, 
+                                  transp_model = 2, phys_model = 2,
+                                  correct_bias = 0, calculate_d13c = 0),
+                  check_input = TRUE, 
+                  df_out = TRUE)
+```
+
+我们可以观察生产力的变化。
+
+```{r}
+par(mar=c(5,5,1,1))
+palette(c(rainbow(3)))
+plot(value~date,data = out.1[out.1$species == 'Fagus sylvatica' &
+                                 out.1$variable == 'gpp',],
+       type='l',xlab='',ylab=expression('GPP'~(t~DM~ha^-1)),col=1)
+  
+  points(value~date,data = out.1[out.1$species == 'Pinus sylvestris' &
+                                   out.1$variable == 'gpp',],
+         type='l',xlab='',col=2)
+   
+  points(value~date,data = out.1[out.1$species == 'Larix olgensis' &
+                                   out.1$variable == 'gpp',],
+         type='l',xlab='',col=3)
+  
+  legend('topleft',legend = unique(out.1$species),
+         lty='solid',col=palette(),bty='n',horiz = T)
+
+
+```
+
+也可以研究不同种的组成。此处我们以总干面积为例。
+  
+```{r}
+par(mar=c(5,5,1,1))
+palette(c(rainbow(3)))
+plot(value~date,data = out.1[out.1$species == 'Fagus sylvatica' &
+                                 out.1$variable == 'basal_area',],
+       type='l',xlab='',
+     ylab=expression('Basal area'~(m^2~ha^-1)),
+     col=1,ylim=c(5,20))
+  
+  points(value~date,data = out.1[out.1$species == 'Pinus sylvestris' &
+                                   out.1$variable == 'basal_area',],
+         type='l',xlab='',col=2)
+   
+  points(value~date,data = out.1[out.1$species == 'Larix olgensis' &
+                                   out.1$variable == 'basal_area',],
+         type='l',xlab='',col=3)
+  
+  legend('topleft',legend = unique(out.1$species),
+         lty='solid',col=palette(),bty='n',horiz = T)
+
+
+```
+
+### 5 具体参数的影响
+
+我们此处以比叶面积为例。这里假设比叶面积翻倍，即单位生物量可以产出两倍的叶面积。
+
+```{r}
+par.new.sla <- par.new
+par.new.sla$`Larix olgensis`[par.new.sla$parameter == 'SLA0'] <- 50
+par.new.sla$`Larix olgensis`[par.new.sla$parameter == 'SLA1'] <- 16
+
+```
+
+
+```{r}
+out.sla <- run_3PG(site = d_site,#站点相关信息，初始土壤水
+                  species = spc.new,#树种相关信息，初始生物量
+                  climate = d_climate,#气象因子
+                  thinning = thin.new,#间苗
+                  parameters = par.new.sla,#按树种的生理参数
+                  size_dist = size.new,#修正大小分布
+                  settings = list(light_model = 2, 
+                                  transp_model = 2, phys_model = 2,
+                                  correct_bias = 0, calculate_d13c = 0),
+                  check_input = TRUE, 
+                  df_out = TRUE)
+```
+
+我们首先可以查看叶面积的变化。
+
+```{r}
+par(mar=c(5,5,1,1))
+palette(c(topo.colors(3)))
+plot(value~date,data = out.sla[out.sla$species == 'Larix olgensis' &
+                                 out.sla$variable == 'lai',],
+       type='l',xlab='',ylab=expression('LAI'~(m^2~m^-2)),col=2,ylim=c(0,5))
+  
+  points(value~date,data = out.1[out.sla$species == 'Larix olgensis' &
+                                   out.sla$variable == 'lai',],
+         type='l',xlab='',col=1)
+   
+  legend('topleft',legend = c('old','new'),
+         lty='solid',col=palette(),bty='n',horiz = T)
+
+
+```
+
+叶面积的变化对于生产力有直接影响。
+
+```{r}
+par(mar=c(5,5,1,1))
+palette(c(rainbow(3)))
+plot(value~date,data = out.sla[out.sla$species == 'Fagus sylvatica' &
+                                 out.sla$variable == 'gpp',],
+       type='l',xlab='',ylab=expression('GPP'~(t~DM~ha^-1)),col=1,ylim=c(0,4))
+  
+  points(value~date,data = out.sla[out.sla$species == 'Pinus sylvestris' &
+                                   out.sla$variable == 'gpp',],
+         type='l',xlab='',col=2)
+   
+  points(value~date,data = out.sla[out.sla$species == 'Larix olgensis' &
+                                   out.sla$variable == 'gpp',],
+         type='l',xlab='',col=3)
+  
+  legend('topleft',legend = unique(out.sla$species),
+         lty='solid',col=palette(),bty='n',horiz = T)
+
+
+```
