@@ -71,7 +71,6 @@ spc.new$stems_n <- 400
 spc.new$biom_stem <- 90
 spc.new$biom_root <- 10
 spc.new$biom_foliage <- 0.2
-
 ```
 
 
@@ -82,13 +81,11 @@ spc.new$biom_foliage <- 0.2
 首先，还是在已有文献中寻找是否有相关参数。
 
 ```{r}
-
 list.spc <- get_parameters(mode = "overview", sp_names = NULL)
 
 e.list <- list.spc$species[grep(pattern = 'Eucalyptus',x = list.spc$species)]
 
 print(e.list)
-
 ```
 
 可以看到我们选定的种并不在列。但是，由相似种E.globulus。在此我们就使用E.globulus的参数作为模板。此后只需要修改我们测量得到的参数即可。
