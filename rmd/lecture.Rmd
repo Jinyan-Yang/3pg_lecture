@@ -221,14 +221,14 @@ kable(i_output)
 ## 6.功能模块-生产力计算
 
 ### 6.1 光利用-生产力
-在3PG中，初级生产力直接有多个环境变量及胜利参数计算得出。
+在3PG中，初级生产力直接有多个环境变量及参数计算得出。
 $$
 GPP = Qf_l(L) \alpha f_t(T)f_w(W)f_g(g_s)~~~~~~~~(1)
 $$
 
 ### 6.2 光照
 
-光照强度有多种度量方式。注意3PG需要的是月日均光照（monthly mean daily solar radiation），单位是$MJ~m^{-2}~d^{-1}$。因为模型实际需要月尺度数据，实际模型在计算时，会先换算成月总光照。
+光照强度(Q)有多种度量方式。注意3PG需要的是月日均光照（monthly mean daily solar radiation），单位是$MJ~m^{-2}~d^{-1}$。因为模型实际需要月尺度数据，实际模型在计算时，会先换算成月总光照。
 
 
 ### 6.3 叶面积指数
@@ -249,6 +249,27 @@ plot(f.low~lai,data = plot.df,
 ```
 
 一般情况下，这一方程不需要调整参数。但是，叶面积指数受到比叶面积（SLA）影响。因此，要特别注意比叶面积数值。
+
+### 6.4 光能利用率
+
+光能利用率（$\alpha$）是基于不同物种的重要参数。它的基本意义是每单位太阳辐射对应的碳吸收（$g~MJ^{-1}$）。$\alpha$的重要性体现在它代表了生产力对于光照的线性关系。
+
+```{r message=FALSE, warning=FALSE}
+# 生产力与光照
+plot.df <- data.frame(q = 1:10,
+                      GPP.low = (1:10) * 2,
+                      GPP.high = (1:10) * 3)
+
+plot(GPP.low~q,data = plot.df,
+     type='p',pch=16,xlab='Radiation',ylab='GPP',col='grey',
+     ylim=c(0,30))
+
+points(GPP.high~q,data = plot.df,
+     type='p',pch=16,xlab='',col='red')
+
+legend('topleft',legend = c('LOW','HIGH'),
+       pch=16,col=c('grey','red'),bty='n')
+```
 
 以上是3PG的最根本性假设，至此我们已经可以计算初级生产力：
 
@@ -282,27 +303,6 @@ points(gpp.x2~date,data = met.dummy.df,
 legend('topleft',legend = c('Species_1','Species_2'),
        pch=16,col=c('grey','red'),bty='n')
 ```
-
-### 6.4 光能利用率
-光能利用率（$\alpha$）是基于不同物种的重要参数。它的基本意义是每单位太阳辐射对应的碳吸收（$g~MJ^{-1}$）。$\alpha$的重要性体现在它代表了生产力对于光照的线性关系。
-
-```{r message=FALSE, warning=FALSE}
-# 生产力与光照
-plot.df <- data.frame(q = 1:10,
-                      GPP.low = (1:10) * 2,
-                      GPP.high = (1:10) * 3)
-
-plot(GPP.low~q,data = plot.df,
-     type='p',pch=16,xlab='Radiation',ylab='GPP',col='grey',
-     ylim=c(0,30))
-
-points(GPP.high~q,data = plot.df,
-     type='p',pch=16,xlab='',col='red')
-
-legend('topleft',legend = c('LOW','HIGH'),
-       pch=16,col=c('grey','red'),bty='n')
-```
-
 
 ### 6.5 温度
 
