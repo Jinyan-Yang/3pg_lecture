@@ -1,0 +1,204 @@
+---
+title: "3PG example"
+author: "Jinyan Yang"
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: true
+    toc_float: true
+    code_folding: true
+---
+```{r message=F, include=FALSE}
+library('r3PG')
+```
+
+We will now use real data from Cumberland Plain Woodland (-33.6166, 150.7377). We need to first read in meteorology data and then obtain plant physiological parameters.
+
+Here we will go through changing each input files (met,species,thinning and parameters).
+
+### 1 Met data
+
+Our site is in Richmond NSW, dominated by E.tereticornis Sm. The site has a mean annual temperature of 17 $^\circ C$ and a mean annual precipitation of 800mm.
+
+Let’s now read and look at the met data.
+
+```{r}
+met.df <- read.csv('e:/repo/3pg_lecture/rmd/ros.met.csv')
+
+plot(met.df$prcp,xlab='',ylab = 'prcp')
+
+plot(met.df$srad,xlab='',ylab = 'srad')
+```
+
+We need to put in number of frost days and  $CO_{2}$ data. 
+
+```{r}
+# 
+met.df$frost_days <- 0
+# 
+met.df$co2 <- 400
+met.df$srad <- 2.3 * met.df$srad
+```
+
+### 2 Site information
+
+```{r}
+site.new <- d_site
+
+site.new$latitude <- -38
+site.new$altitude <- 50
+site.new$soil_class <- 2
+site.new$asw_i <- 150
+site.new$asw_min <- 50
+site.new$asw_max <- 300
+site.new$from <- '2018-01'
+site.new$to <- '2019-12'
+```
+
+
+### 3 Species composition
+
+Since we are using only one species, the inputs are just the initial conditions of the species.
+
+```{r}
+spc.new <- d_species[1,]
+spc.new$species <- 'ET'
+spc.new$planted <- '1900-01'
+spc.new$fertility <- 1
+spc.new$stems_n <- 400
+spc.new$biom_stem <- 90
+spc.new$biom_root <- 10
+spc.new$biom_foliage <- 0.2
+```
+
+
+### 4 Plant physiology
+
+Let see if our spcecies has been reported by previous literature.
+
+```{r}
+list.spc <- get_parameters(mode = "overview", sp_names = NULL)
+
+e.list <- list.spc$species[grep(pattern = 'Eucalyptus',x = list.spc$species)]
+
+print(e.list)
+```
+
+We did not find our species but a similar one, E.globulus. We are going to use the most of the parameters from E.globulus as example.
+
+```{r}
+et.df <- get_parameters(mode = "full", sp_names = 'Eucalyptus globulus')
+
+et.sub <- subset(et.df[4,],select = -c(source_full,species,
+                                       link,notes,parset_id,     
+                                       source,source_comments,
+                                       country,age,type,year,region))
+# 
+par.new <- d_parameters[,c(1,3)]
+names(par.new)[2] <- 'ET'
+# 
+par.new$ET[par.new$parameter == 'SLA0'] <- 50
+par.new$ET[par.new$parameter == 'SLA1'] <- 50
+
+par.new$ET[par.new$parameter == 'MaxAge'] <- 500
+par.new$ET[par.new$parameter == 'LAImaxIntcptn'] <- 3
+
+par.new$ET[par.new$parameter == 'alphaCx'] <- et.sub$alphaCx
+par.new$ET[par.new$parameter == 'fCalpha700'] <- 1.8
+par.new$ET[par.new$parameter == 'fCg700'] <- 0.6
+
+par.new$ET[par.new$parameter == 'Tmin'] <- et.sub$Tmin
+par.new$ET[par.new$parameter == 'Topt'] <- et.sub$Topt
+par.new$ET[par.new$parameter == 'Tmax'] <- et.sub$Tmax
+
+par.new <- par.new[,c('parameter','ET')]
+```
+
+
+### 4 Self-thinning
+
+We are looking at a mature forest so self-thinning is not a concern– it has been done already. For demonstration purpose, we use the thinning data from Fagus sylvatica.
+
+```{r}
+# 
+thin.new <- d_thinning[1,]
+
+thin.new$species <- 'ET'
+
+thin.new$age <- 200
+# 
+size.new <- (d_sizeDist[,1:2])
+names(size.new)[2] <- 'ET'
+```
+
+Now we can run the model!
+
+### 5 Normal run
+
+```{r}
+met.df$co2 <- 400
+out.et <- run_3PG(site = site.new,
+                  species = spc.new,
+                  climate = met.df,
+                  thinning = thin.new,
+                  parameters = par.new,
+                  size_dist = size.new,
+                  settings = list(light_model = 2, 
+                                  transp_model = 2, phys_model = 2,
+                                  correct_bias = 0, calculate_d13c = 0),
+                  check_input = TRUE, 
+                  df_out = TRUE)
+
+# 
+met.df$co2 <- 550
+out.et.eco2 <- run_3PG(site = site.new,
+                  species = spc.new,
+                  climate = met.df,
+                  thinning = thin.new,
+                  parameters = par.new,
+                  size_dist = size.new,
+                  settings = list(light_model = 2, 
+                                  transp_model = 2, phys_model = 2,
+                                  correct_bias = 0, calculate_d13c = 0),
+                  check_input = TRUE, 
+                  df_out = TRUE)
+```
+
+Let's check the change in GPP. 
+
+```{r}
+par(mar=c(5,5,1,1))
+palette(c(rainbow(3)))
+plot(value~date,data = out.et.eco2[out.et.eco2$species == 'ET' &
+                                 out.et.eco2$variable == 'gpp',],
+       type='l',xlab='',ylab=expression('GPP'~(t~DM~ha^-1)),col=1)
+  
+  points(value~date,data = out.et[out.et$species == 'ET' &
+                                   out.et$variable == 'gpp',],
+         type='l',xlab='',col=2)
+  
+  legend('topleft',legend = c('high','current'),
+         lty='solid',col=palette(),bty='n',horiz = T)
+
+
+```
+
+Or explore the impact of $CO_{2}$
+
+```{r}
+par(mar=c(5,5,1,1))
+palette(c(rainbow(3)))
+plot(value~date,data = out.et.eco2[out.et.eco2$species == 'ET' &
+                                 out.et.eco2$variable == 'transp_veg',],
+       type='l',xlab='',
+     ylab=expression('Tranpiration'~(mm~month^-1)),col=1)
+  
+  points(value~date,data = out.et[out.et$species == 'ET' &
+                                   out.et$variable == 'transp_veg',],
+         type='l',xlab='',col=2)
+  
+  legend('topleft',legend = c('high','current'),
+         lty='solid',col=palette(),bty='n',horiz = T)
+
+
+```
