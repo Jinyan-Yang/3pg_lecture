@@ -23,7 +23,7 @@ Our site is in Richmond NSW, dominated by E.tereticornis Sm. The site has a mean
 Let’s now read and look at the met data.
 
 ```{r}
-met.df <- read.csv('e:/repo/3pg_lecture/rmd/ros.met.csv')
+met.df <- read.csv('e:/repo/3pg/rmd/ros.met.csv')
 
 plot(met.df$prcp,xlab='',ylab = 'prcp')
 
@@ -51,8 +51,8 @@ site.new$soil_class <- 2
 site.new$asw_i <- 150
 site.new$asw_min <- 50
 site.new$asw_max <- 300
-site.new$from <- '2018-01'
-site.new$to <- '2019-12'
+site.new$from <- '2019-01'
+site.new$to <- '2020-12'
 ```
 
 
